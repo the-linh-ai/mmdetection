@@ -10,4 +10,4 @@ class NuScenesDataset(CocoDataset):
     )
 
     def _filter_imgs(self):
-        super()._filter_imgs(min_size=0)
+        return super()._filter_imgs(min_size=0)
