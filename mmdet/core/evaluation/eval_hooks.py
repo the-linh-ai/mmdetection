@@ -1,5 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import shutil
 import bisect
+import tempfile
 import os.path as osp
 
 import mmcv
@@ -109,7 +111,10 @@ class DistEvalHook(BaseDistEvalHook):
 
         tmpdir = self.tmpdir
         if tmpdir is None:
-            tmpdir = osp.join(runner.work_dir, '.eval_hook')
+            if runner.work_dir is None:
+                tmpdir = tempfile.mkdtemp()
+            else:
+                tmpdir = osp.join(runner.work_dir, '.eval_hook')
 
         from mmdet.apis import multi_gpu_test
         results = multi_gpu_test(
@@ -124,3 +129,7 @@ class DistEvalHook(BaseDistEvalHook):
 
             if self.save_best:
                 self._save_ckpt(runner, key_score)
+
+        # Remove temp dir if it has not been removed
+        if osp.exists(tmpdir):
+            shutil.rmtree(tmpdir)

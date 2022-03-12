@@ -1,0 +1,51 @@
+# Distributed attributes
+device: cuda:0
+local_rank: 0
+distributed_world_size: 1
+
+general:
+    # These properties will be automatically set
+    command:
+    save_dir:
+    epoch:
+    step:
+
+    # If null, do not save anything;
+    work_dir: /opt/tiger/development/mmdetection/work_dirs/
+    sub_dir:
+
+    log_interval: 10
+    debugging: false
+    seed:
+    save_pool: false  # pickle labeled & unlabeled pool
+    save_model: false  # save model state dict
+
+mmdet_config:
+    _file_: mmdet_config.yaml
+    _choice_: nuimages
+
+trainer:
+    _file_: trainers.yaml
+    _choice_: base_object_detection_trainer
+
+aggregator:
+    _file_: aggregators.yaml
+    _choice_:
+
+policy:
+    _file_: policies.yaml
+    _choice_:
+
+active_learner:
+    _file_: learners.yaml
+    _choice_:
+
+training:
+    _file_: train.yaml
+    _choice_: nuimages_4k_32
+
+# `custom` is a special config designed mostly
+# for workarounds, i.e., custom logic
+custom:
+    al_step_size: null  # override init_size and step_size in AL policies
+    optimizer: null  # override optimizer type (e.g., SGD, Adam, etc.)

@@ -1,0 +1,3 @@
+single_forward_pass:
+    learner_class: SingleForwardPassLearner
+    learner_init_kwargs: {}

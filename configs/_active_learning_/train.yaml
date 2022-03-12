@@ -1,0 +1,11 @@
+# ===============================
+# For NuImages
+# ===============================
+
+# active learning step size of 4k; total batch size of 32 (with 16 per gpu)
+nuimages_4k_32:
+    num_steps: 5
+    batch_size: 16
+    lr: 0.04
+    num_workers: 4
+    num_classes: 10

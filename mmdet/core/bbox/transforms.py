@@ -113,24 +113,46 @@ def roi2bbox(rois):
     return bbox_list
 
 
-def bbox2result(bboxes, labels, num_classes):
+def bbox2result(bboxes, labels, num_classes, probs=None):
     """Convert detection results to a list of numpy arrays.
 
     Args:
         bboxes (torch.Tensor | np.ndarray): shape (n, 5)
         labels (torch.Tensor | np.ndarray): shape (n, )
         num_classes (int): class number, including background class
+        probs (torch.Tensor | np.ndarray | None): (optional) shape
+            (n, num_classes), including one background class. Predicted
+            probabilities of the corresponding boxes.
 
     Returns:
-        list(ndarray): bbox results of each class
+        list(ndarray) or tuple[list(ndarray), list(ndarray)]: bbox results of
+            each class. If `probs` is not None, an additional list of arrays is
+            returned containing predicted proabilities of the corresponding
+            boxes.
     """
     if bboxes.shape[0] == 0:
-        return [np.zeros((0, 5), dtype=np.float32) for i in range(num_classes)]
+        bboxes = [
+            np.zeros((0, 5), dtype=np.float32) for i in range(num_classes)]
+        if probs is None:
+            return bboxes
+        else:
+            probs = [
+                np.zeros((0, probs.shape[1]), dtype=np.float32)
+                for i in range(num_classes)
+            ]
+            return bboxes, probs
     else:
         if isinstance(bboxes, torch.Tensor):
             bboxes = bboxes.detach().cpu().numpy()
             labels = labels.detach().cpu().numpy()
-        return [bboxes[labels == i, :] for i in range(num_classes)]
+            if probs is not None:
+                probs = probs.detach().cpu().numpy()
+        bboxes = [bboxes[labels == i, :] for i in range(num_classes)]
+        if probs is None:
+            return bboxes
+        else:
+            probs = [probs[labels == i, :] for i in range(num_classes)]
+            return bboxes, probs
 
 
 def distance2bbox(points, distance, max_shape=None):

@@ -320,7 +320,8 @@ class BBoxHead(BaseModule):
                    img_shape,
                    scale_factor,
                    rescale=False,
-                   cfg=None):
+                   cfg=None,
+                   return_probs=False):
         """Transform network output for a batch into bbox predictions.
 
         Args:
@@ -337,17 +338,28 @@ class BBoxHead(BaseModule):
             rescale (bool): If True, return boxes in original image space.
                 Default: False.
             cfg (obj:`ConfigDict`): `test_cfg` of Bbox Head. Default: None
+            return_probs (bool): If True, return softmax scores (i.e., predicted
+                probabilities) of selected boxes. See more in `Returns` below.
+                Added by Tuyen.
 
         Returns:
-            tuple[Tensor, Tensor]:
+            tuple[Tensor, Tensor] or tuple[Tensor, Tensor, Tensor]:
                 First tensor is `det_bboxes`, has the shape
                 (num_boxes, 5) and last
                 dimension 5 represent (tl_x, tl_y, br_x, br_y, score).
                 Second tensor is the labels with shape (num_boxes, ).
+                If `return_probs` is True (see above), an additional third
+                tensor is returned with shape (num_boxes, num_classes),
+                containing predicted probabilities of all classes for each box.
+                This is newly added for active learning purposes.
         """
 
         # some loss (Seesaw loss..) may have custom activation
         if self.custom_cls_channels:
+            assert not return_probs, (
+                "Not allowing returning softmax scores when having a custom "
+                "activation"
+            )
             scores = self.loss_cls.get_activation(cls_score)
         else:
             scores = F.softmax(
@@ -370,6 +382,18 @@ class BBoxHead(BaseModule):
 
         if cfg is None:
             return bboxes, scores
+        elif return_probs:
+            det_bboxes, det_labels, inds = multiclass_nms(bboxes, scores,
+                                                          cfg.score_thr,
+                                                          cfg.nms,
+                                                          cfg.max_per_img,
+                                                          return_inds=True)
+            # Need to expand `scores` as same as in `multiclass_nms`
+            num_classes = scores.shape[1]
+            scores = scores[:, None].repeat(
+                1, num_classes - 1, 1)  # (num_boxes, num_classes - 1, num_classes)
+            scores = scores.view(-1, num_classes)[inds]  # (num_boxes', num_classes)
+            return det_bboxes, det_labels, scores
         else:
             det_bboxes, det_labels = multiclass_nms(bboxes, scores,
                                                     cfg.score_thr, cfg.nms,

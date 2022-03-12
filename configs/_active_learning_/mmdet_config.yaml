@@ -1,0 +1,6 @@
+# ==============
+# NuImages
+# ==============
+
+nuimages:
+    config_path: configs/_active_learning_/faster_rcnn_r50_fpn_2x_nuimages.py

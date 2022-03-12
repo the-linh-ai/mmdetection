@@ -1,0 +1,13 @@
+# Normal-setting policies
+
+random_4k:
+    policy_class: RandomPolicy
+    policy_init_kwargs:
+        init_size: 4000
+        step_size: 4000
+
+max_entropy_4k:
+    policy_class: MaxEntropyPolicy
+    policy_init_kwargs:
+        init_size: 4000
+        step_size: 4000

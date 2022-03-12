@@ -1,0 +1,3 @@
+base_object_detection_trainer:
+    trainer_class: BaseObjectDetectionTrainer
+    trainer_init_kwargs: {}

@@ -64,7 +64,10 @@ class CustomDataset(Dataset):
                  proposal_file=None,
                  test_mode=False,
                  filter_empty_gt=True,
-                 file_client_args=dict(backend='disk')):
+                 file_client_args=dict(backend='disk'),
+                 # For active learning; added by Tuyen
+                 debugging=False,
+                 data_pool=None):
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix
@@ -74,6 +77,13 @@ class CustomDataset(Dataset):
         self.filter_empty_gt = filter_empty_gt
         self.CLASSES = self.get_classes(classes)
         self.file_client = mmcv.FileClient(**file_client_args)
+        # For active learning; added by Tuyen
+        self.debugging = debugging
+        self.data_pool = data_pool
+        if data_pool is not None and test_mode:
+            raise RuntimeError(
+                "Illegally attempting to use data pool for test data."
+            )
 
         # join paths if data_root is specified
         if self.data_root is not None:
@@ -120,6 +130,11 @@ class CustomDataset(Dataset):
             self.data_infos = [self.data_infos[i] for i in valid_inds]
             if self.proposals is not None:
                 self.proposals = [self.proposals[i] for i in valid_inds]
+
+        # Post process for active learning
+        self.post_process()
+
+        if not test_mode:
             # set group flag for the sampler
             self._set_group_flag()
 
@@ -129,6 +144,41 @@ class CustomDataset(Dataset):
     def __len__(self):
         """Total number of samples of data."""
         return len(self.data_infos)
+
+    def post_process(self):
+        """Custom logic for active learning."""
+        # Debugging: restrict to first xx images
+        if self.debugging:
+            num_images_debugging = 50
+            print_log(
+                f"[{self.__class__.__name__}] Debugging mode is enabled. "
+                f"Restricting to at most {num_images_debugging} images in the "
+                f"dataset"
+            )
+            self.data_infos = self.data_infos[:num_images_debugging]
+            if self.proposals is not None:
+                self.proposals = self.proposals[:num_images_debugging]
+
+        # Data pool
+        if self.data_pool is not None:
+            labeled_image_ids = self.data_pool.get_pool()
+            filenames = [info["filename"] for info in self.data_infos]
+            labeled_inds = [filenames.index(id) for id in labeled_image_ids]
+
+            self.data_infos = [self.data_infos[i] for i in labeled_inds]
+            if self.proposals is not None:
+                self.proposals = [self.proposals[i] for i in labeled_inds]
+
+        # Image IDs, used for all active learning processes
+        self._valid_image_ids = [info["filename"] for info in self.data_infos]
+
+    def get_image_ids(self):
+        """Get image IDs used for active learning."""
+        if self.test_mode:
+            raise RuntimeError(
+                "Illegally attempting to retrieve image IDs for test data."
+            )
+        return self._valid_image_ids
 
     def load_annotations(self, ann_file):
         """Load annotation from annotation file."""

@@ -225,7 +225,8 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                     proposal_list,
                     img_metas,
                     proposals=None,
-                    rescale=False):
+                    rescale=False,
+                    return_probs=False):
         """Test without augmentation.
 
         Args:
@@ -237,6 +238,9 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
             img_metas (list[dict]): Meta information of images.
             rescale (bool): Whether to rescale the results to
                 the original image. Default: True.
+            return_probs (bool): If True, return softmax scores (i.e., predicted
+                probabilities) of the outputs boxes. See more in `Returns`
+                below. Added by Tuyen.
 
         Returns:
             list[list[np.ndarray]] or list[tuple]: When no mask branch,
@@ -250,18 +254,29 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
         """
         assert self.with_bbox, 'Bbox head must be implemented.'
 
-        det_bboxes, det_labels = self.simple_test_bboxes(
-            x, img_metas, proposal_list, self.test_cfg, rescale=rescale)
+        outs = self.simple_test_bboxes(
+            x, img_metas, proposal_list, self.test_cfg,
+            rescale=rescale, return_probs=return_probs)
+        if return_probs:
+            det_bboxes, det_labels, det_probs = outs
+        else:
+            det_bboxes, det_labels = outs
 
         bbox_results = [
             bbox2result(det_bboxes[i], det_labels[i],
-                        self.bbox_head.num_classes)
+                        self.bbox_head.num_classes,
+                        probs=det_probs[i] if return_probs else None)
             for i in range(len(det_bboxes))
         ]
 
         if not self.with_mask:
-            return bbox_results
+            if return_probs:
+                bboxes_results, bboxes_probs = zip(*bbox_results)
+                return bboxes_results, bboxes_probs
+            else:
+                return bbox_results
         else:
+            assert not return_probs  # not implemented
             segm_results = self.simple_test_mask(
                 x, img_metas, det_bboxes, det_labels, rescale=rescale)
             return list(zip(bbox_results, segm_results))

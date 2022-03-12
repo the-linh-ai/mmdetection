@@ -3,7 +3,7 @@ from .coco import CocoDataset
 
 
 @DATASETS.register_module()
-class NuScenesDataset(CocoDataset):
+class NuImagesDataset(CocoDataset):
     CLASSES = (
         'car', 'truck', 'trailer', 'bus', 'construction_vehicle',
         'bicycle', 'motorcycle', 'pedestrian', 'traffic_cone', 'barrier',

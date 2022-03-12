@@ -1,7 +1,15 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import os
 import glob
 import os.path as osp
 import warnings
+
+import mmdet
+
+
+def get_codebase_root():
+    codebase_root = os.path.join(os.path.dirname(mmdet.__file__), '..')
+    return os.path.normpath(codebase_root)
 
 
 def find_latest_checkpoint(path, suffix='pth'):

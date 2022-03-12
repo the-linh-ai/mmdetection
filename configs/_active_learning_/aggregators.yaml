@@ -1,0 +1,31 @@
+do_nothing:
+    aggregator_class: DoNothingAggregator
+    aggregator_init_kwargs: {}
+
+mean:
+    aggregator_class: MeanAggregator
+    aggregator_init_kwargs: {}
+
+max:
+    aggregator_class: MaxAggregator
+    aggregator_init_kwargs: {}
+
+min:
+    aggregator_class: MinAggregator
+    aggregator_init_kwargs: {}
+
+median:
+    aggregator_class: MedianAggregator
+    aggregator_init_kwargs: {}
+
+truncated_mean_25:
+    aggregator_class: TruncatedMeanAggregator
+    aggregator_init_kwargs:
+        start: 0.0
+        end: 0.25
+
+truncated_mean_75:
+    aggregator_class: TruncatedMeanAggregator
+    aggregator_init_kwargs:
+        start: 0.75
+        end: 1.00
