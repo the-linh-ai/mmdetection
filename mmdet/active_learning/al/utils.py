@@ -50,6 +50,54 @@ def calculate_entropy_np(
     return entropy
 
 
+def calculate_bvsb_np(
+    logits: np.ndarray,
+    dim: int,
+    normalized: bool,
+    assert_normalized: bool = False,
+    eps: float = 1e-8,
+) -> np.ndarray:
+    """
+    Calculate best-vs-second best values from a prediction map.
+
+    Args:
+        logits (np.ndarray): Input logits.
+        dim (int): Dimension along which bvsb value is calculated.
+        normalized (bool): Whether `tensor` is normalized along `dim` axis.
+            If not, a softmax layer will be applied to the input tensor.
+        assert_normalized (bool): Whether to check if the array is normalized
+            or not if `normalized` is True.
+    """
+    if logits.shape[1] == 1:
+        raise ValueError(
+            f"Best-vs-second-best policy is not applicable for single-class "
+            f"probabilities."
+        )
+
+    if not normalized:
+        logits = calculate_softmax_np(logits, dim=dim)
+    elif assert_normalized:
+        logits_s = logits.sum(axis=dim)
+        if not np.allclose(logits_s, 1.0):
+            raise ValueError(
+                "The array has not been normalized (e.g., softmaxed)"
+            )
+
+    bvsb_idxs = np.argpartition(
+        -logits,
+        kth=2,
+        axis=dim,
+    )
+
+    bvsb_idxs_0 = np.take(bvsb_idxs, indices=[0], axis=dim)
+    bvsb_0 = np.take_along_axis(logits, bvsb_idxs_0, axis=dim).squeeze(dim)
+    bvsb_idxs_1 = np.take(bvsb_idxs, indices=[1], axis=dim)
+    bvsb_1 = np.take_along_axis(logits, bvsb_idxs_1, axis=dim).squeeze(dim)
+
+    bvsb = (bvsb_1 / bvsb_0)
+    return bvsb
+
+
 def get_unique_indices(
     x: List[Any],
     device: str,

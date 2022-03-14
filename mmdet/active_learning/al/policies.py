@@ -21,7 +21,11 @@ import numpy as np
 from mmcv.utils import print_log
 
 # AL
-from .utils import calculate_entropy_np, get_unique_indices
+from .utils import (
+    calculate_entropy_np,
+    calculate_bvsb_np,
+    get_unique_indices,
+)
 from .aggregators import BaseAggregator
 from .learners import (
     BaseOutputType,
@@ -406,6 +410,20 @@ class MaxEntropyPolicy(BasePolicy):
         SingleForwardPassOutputs,
     ]
 
+    def __init__(self, uncertainty_method: str = "entropy", **kwargs):
+        super().__init__(**kwargs)
+
+        uncertainty_mapping = {
+            "entropy": calculate_entropy_np,
+            "bvsb": calculate_bvsb_np,
+        }
+        if uncertainty_method not in uncertainty_mapping:
+            raise ValueError(
+                f"Invalid uncertainty methods: {uncertainty_method}. Allowed "
+                f"options are: {list(uncertainty_mapping.keys())}"
+            )
+        self.uncertainty_fn = uncertainty_mapping[uncertainty_method]
+
     def select(
         self,
         unlabeled_outputs: Iterable[Union[SingleForwardPassOutputs]],
@@ -427,7 +445,7 @@ class MaxEntropyPolicy(BasePolicy):
             for pred in batch_preds:
                 # Concatenate all classes' predictions and calculate entropy
                 pred = np.concatenate(pred, axis=0)  # (N, C)
-                entropy = calculate_entropy_np(
+                entropy = self.uncertainty_fn(
                     pred, dim=1, normalized=True, assert_normalized=True,
                 )  # (N,)
 
