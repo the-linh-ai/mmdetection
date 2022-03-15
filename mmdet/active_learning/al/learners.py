@@ -29,6 +29,7 @@ from mmcv.utils import print_log
 
 # mmdet
 from mmdet.datasets import build_dataset, build_dataloader
+from mmdet.models.utils import SyncedDropout
 from mmdet.utils import get_root_logger
 from mmdet.utils.logger import ProgressBar
 
@@ -202,9 +203,7 @@ class SingleForwardPassLearner(BaseLearner):
         image_ids: List[str],
         image_metas: List[dict],
     ) -> SingleForwardPassOutputs:
-        """
-        Process one batch of data.
-        """
+
         _, preds = self.model.simple_test(
             img=images, img_metas=image_metas, return_probs=True,
         )  # list[list[ndarray]] (outer: image level; inner: class level)
@@ -212,6 +211,60 @@ class SingleForwardPassLearner(BaseLearner):
         return SingleForwardPassOutputs(
             keys=image_ids,
             preds=preds,
+        )
+
+    def step(self):
+        pass
+
+
+class MonteCarloDropoutOutputs(BaseOutputType):
+    def __init__(
+        self,
+        keys: List[str],
+        preds: List[List[List[np.ndarray]]],
+        **kwargs,
+    ):
+        self.keys = keys
+        self.preds = preds
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+
+@register("learner")
+class MonteCarloDropoutLearner(BaseLearner):
+    """
+    Monte Carlo dropout learner, which perform multiple forward passes through
+    the model to obtain the multiple sets of predicted probabilities.
+    """
+    def __init__(self, num_forward_passes: int = 10, **kwargs):
+        super().__init__(**kwargs)
+        self.num_forward_passes = num_forward_passes
+
+    @torch.no_grad()
+    def process_one_batch(
+        self,
+        images: T,
+        image_ids: List[str],
+        image_metas: List[dict],
+    ) -> MonteCarloDropoutOutputs:
+
+        all_preds = []
+        SyncedDropout.train_all()  # enable all SyncedDropout instances
+
+        # Perform multiple forward passes
+        for _ in range(self.num_forward_passes):
+            _, preds = self.model.simple_test(
+                img=images, img_metas=image_metas, return_probs=True,
+            )  # list[list[ndarray]] (outer: image level; inner: class level)
+            all_preds.append(preds)
+
+        # Merge image by image
+        assert all(len(all_preds[0]) == len(preds) for preds in all_preds)
+        all_preds = list(zip(*all_preds))
+
+        return MonteCarloDropoutOutputs(
+            keys=image_ids,
+            preds=all_preds,
         )
 
     def step(self):

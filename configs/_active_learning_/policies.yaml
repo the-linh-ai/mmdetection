@@ -11,3 +11,9 @@ max_entropy_4k:
     policy_init_kwargs:
         init_size: 4000
         step_size: 4000
+
+bald_4k:
+    policy_class: BALDPolicy
+    policy_init_kwargs:
+        init_size: 4000
+        step_size: 4000

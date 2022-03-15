@@ -30,6 +30,7 @@ from .aggregators import BaseAggregator
 from .learners import (
     BaseOutputType,
     SingleForwardPassOutputs,
+    MonteCarloDropoutOutputs,
 )
 
 from ..utils.misc_utils import assert_dataset_has_attr
@@ -474,6 +475,95 @@ class MaxEntropyPolicy(BasePolicy):
         # Sort and select
         idxs = np.argsort(
             -entropy_values,
+            axis=0,
+        )[:num_images_to_acquire]  # relative indices
+        keys = [keys[i] for i in idxs]
+        return keys
+
+
+@register("policy")
+class BALDPolicy(BasePolicy):
+    """
+    Bayesian Active Learning by Disagreement (BALD) to be used with MC dropout
+    learner.
+    """
+    accepted_output_types = [
+        MonteCarloDropoutOutputs,
+    ]
+
+    def select(
+        self,
+        unlabeled_outputs: Iterable[Union[MonteCarloDropoutOutputs]],
+        labeled_outputs: Iterable[Union[MonteCarloDropoutOutputs]],
+    ):
+        num_images_to_acquire = self.get_step_size()
+        keys = []
+        bald_values = []
+
+        for outputs_batch in unlabeled_outputs:
+            self.verify_outputs(outputs_batch)
+
+            # Unpack data
+            batch_keys = outputs_batch.keys
+            batch_preds = outputs_batch.preds  # list of lists of lists of arrays of (N, C)
+
+            assert len(batch_keys) == len(batch_preds)
+            batch_bald_values = []
+            for preds in batch_preds:
+                average_preds = 0
+                expected_entr = 0
+
+                # Loop over all MC dropout predictions
+                for pred in preds:
+                    # Concatenate all classes' predictions and calculate entropy
+                    pred = np.concatenate(pred, axis=0)  # (N, C)
+                    average_preds += pred  # (N, C)
+                    entropy = calculate_entropy_np(
+                        pred, dim=1, normalized=True, assert_normalized=True,
+                    )  # (N,)
+                    expected_entr += entropy  # (N,)
+
+                # First term: entropy of predictions, approximated by dropout
+                # sampling
+                average_entr = calculate_entropy_np(
+                    average_preds / len(preds),
+                    dim=1,
+                    normalized=True,
+                    assert_normalized=False,
+                )  # (N,)
+
+                # Second term: expected value of entropy of predictions given
+                # a set of parameters
+                expected_entr = expected_entr / len(preds)  # (N,)
+
+                # Final BALD value (JS divergence)
+                bald_value = average_entr - expected_entr  # (N,)
+
+                # Aggregate
+                bald_value = self.aggregator(bald_value, axis=0)  # scalar
+                batch_bald_values.append(bald_value)
+
+            # Aggregate across processes
+            batch_bald_values = np.array(batch_bald_values)
+            batch_keys, batch_bald_values = gather(
+                [batch_keys, batch_bald_values],
+                self.cfg.device,
+            )
+            keys.extend(sum(batch_keys, []))
+            bald_values.extend(batch_bald_values)
+
+        # Aggregate and sanity check
+        bald_values = np.concatenate(bald_values, axis=0)
+        assert len(keys) == len(bald_values)
+
+        # Remove duplicates due to DDP
+        unique_indices = get_unique_indices(keys, self.cfg.device)
+        keys = [keys[i] for i in unique_indices]
+        bald_values = bald_values[unique_indices]
+
+        # Sort and select
+        idxs = np.argsort(
+            -bald_values,
             axis=0,
         )[:num_images_to_acquire]  # relative indices
         keys = [keys[i] for i in idxs]

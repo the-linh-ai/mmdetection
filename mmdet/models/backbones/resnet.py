@@ -8,7 +8,7 @@ from mmcv.runner import BaseModule
 from torch.nn.modules.batchnorm import _BatchNorm
 
 from ..builder import BACKBONES
-from ..utils import ResLayer
+from ..utils import ResLayer, SyncedDropout
 
 
 class BasicBlock(BaseModule):
@@ -384,6 +384,7 @@ class ResNet(BaseModule):
                  norm_eval=True,
                  dcn=None,
                  stage_with_dcn=(False, False, False, False),
+                 dropout=0.0,
                  plugins=None,
                  with_cp=False,
                  zero_init_residual=True,
@@ -485,6 +486,8 @@ class ResNet(BaseModule):
             layer_name = f'layer{i + 1}'
             self.add_module(layer_name, res_layer)
             self.res_layers.append(layer_name)
+
+        self.dropout_layer = SyncedDropout(p=dropout)
 
         self._freeze_stages()
 
@@ -636,11 +639,13 @@ class ResNet(BaseModule):
             x = self.conv1(x)
             x = self.norm1(x)
             x = self.relu(x)
+        x = self.dropout_layer(x)
         x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
+            x = self.dropout_layer(x)
             if i in self.out_indices:
                 outs.append(x)
         return tuple(outs)

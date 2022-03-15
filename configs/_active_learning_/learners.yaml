@@ -1,3 +1,8 @@
 single_forward_pass:
     learner_class: SingleForwardPassLearner
     learner_init_kwargs: {}
+
+mc_dropout:
+    learner_class: MonteCarloDropoutLearner
+    learner_init_kwargs:
+        num_forward_passes:

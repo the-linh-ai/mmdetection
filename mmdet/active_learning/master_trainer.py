@@ -235,6 +235,7 @@ class MasterTrainer:
             train_config.runner.max_epochs = 2
             train_config.evaluation.interval = 1
             al_config.general.log_interval = train_config.log_config.interval = 5
+            al_config.custom.al_step_size = 25
 
         # Custom logic; mainly for ugly workarounds
         self._parse_custom_logic()
