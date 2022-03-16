@@ -3,11 +3,11 @@ Implementations of image-level active learning policies for object detection.
 """
 
 
+import os
 import pickle
 from copy import deepcopy
 from typing import (
     List,
-    Tuple,
     Dict,
     Set,
     Union,
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 # mmdet
 from mmdet.datasets import build_dataset
 from mmdet.utils import get_root_logger
-from mmdet.utils.comm import is_main_process
+from mmdet.utils.comm import is_main_process, synchronize
 
 
 def to_set(x: List[Any]) -> Set[Any]:
@@ -320,9 +320,7 @@ class BasePolicy:
         self,
         unlabeled_outputs: Iterable[BaseOutputType],
         labeled_outputs: Iterable[BaseOutputType],
-    ) -> Tuple[
-        List[Union[str, int]],
-    ]:
+    ) -> List[Union[str, int]]:
         """
         Implementation of the active learning acquisition function. Given
         outputs as an iterator from the learner, this function must return a
@@ -406,12 +404,22 @@ class RandomPolicy(BasePolicy):
 class MaxEntropyPolicy(BasePolicy):
     """
     Active learning by max entropy.
+
+    Args:
+        uncertainty_method (str): one of ["entropy", "bvsb"].
+        save_preds (bool): whether to save predictions as well as active
+            learning scores for all unlabeled images.
     """
     accepted_output_types = [
         SingleForwardPassOutputs,
     ]
 
-    def __init__(self, uncertainty_method: str = "entropy", **kwargs):
+    def __init__(
+        self,
+        uncertainty_method: str = "entropy",
+        save_preds: bool = False,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         uncertainty_mapping = {
@@ -424,6 +432,7 @@ class MaxEntropyPolicy(BasePolicy):
                 f"options are: {list(uncertainty_mapping.keys())}"
             )
         self.uncertainty_fn = uncertainty_mapping[uncertainty_method]
+        self.save_preds = save_preds
 
     def select(
         self,
@@ -432,6 +441,7 @@ class MaxEntropyPolicy(BasePolicy):
     ):
         num_images_to_acquire = self.get_step_size()
         keys = []
+        preds = []  # list of lists of arrays of (N, C); outer: image; inner: class
         entropy_values = []
 
         for outputs_batch in unlabeled_outputs:
@@ -463,14 +473,25 @@ class MaxEntropyPolicy(BasePolicy):
             keys.extend(sum(batch_keys, []))
             entropy_values.extend(batch_entropy_values)
 
+            if self.save_preds:
+                batch_preds = gather(
+                    [batch_preds],
+                    self.cfg.device,
+                )[0]
+                preds.extend(sum(batch_preds, []))
+
         # Aggregate and sanity check
         entropy_values = np.concatenate(entropy_values, axis=0)
         assert len(keys) == len(entropy_values)
+        if self.save_preds:
+            assert len(keys) == len(preds)
 
         # Remove duplicates due to DDP
         unique_indices = get_unique_indices(keys, self.cfg.device)
         keys = [keys[i] for i in unique_indices]
         entropy_values = entropy_values[unique_indices]
+        if self.save_preds:
+            preds = [preds[i] for i in unique_indices]
 
         # Sort and select
         idxs = np.argsort(
@@ -478,6 +499,21 @@ class MaxEntropyPolicy(BasePolicy):
             axis=0,
         )[:num_images_to_acquire]  # relative indices
         keys = [keys[i] for i in idxs]
+
+        # Outputs
+        if self.save_preds and is_main_process():
+            to_save = {
+                "keys": keys,
+                "preds": preds,
+                "entropy_values": entropy_values,
+            }
+            save_path = os.path.join(
+                self.master_trainer.save_dir,
+                f"preds.step_{self.master_trainer.step}.pkl",
+            )
+            with open(save_path, "wb") as fout:
+                pickle.dump(to_save, fout)
+        synchronize()
         return keys
 
 
