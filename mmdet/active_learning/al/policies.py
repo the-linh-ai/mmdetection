@@ -478,7 +478,7 @@ class MaxEntropyPolicy(BasePolicy):
                     [batch_preds],
                     self.cfg.device,
                 )[0]
-                preds.extend(sum(batch_preds, []))
+                preds.extend(list(sum(batch_preds, tuple())))
 
         # Aggregate and sanity check
         entropy_values = np.concatenate(entropy_values, axis=0)
