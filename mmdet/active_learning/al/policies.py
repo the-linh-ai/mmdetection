@@ -478,7 +478,8 @@ class MaxEntropyPolicy(BasePolicy):
                     [batch_preds],
                     self.cfg.device,
                 )[0]
-                preds.extend(list(sum(batch_preds, tuple())))
+                batch_preds = [list(preds) for preds in batch_preds]
+                preds.extend(sum(batch_preds, []))
 
         # Aggregate and sanity check
         entropy_values = np.concatenate(entropy_values, axis=0)
@@ -502,6 +503,7 @@ class MaxEntropyPolicy(BasePolicy):
 
         # Outputs
         if self.save_preds and is_main_process():
+            # Save
             to_save = {
                 "keys": keys,
                 "preds": preds,
@@ -513,6 +515,14 @@ class MaxEntropyPolicy(BasePolicy):
             )
             with open(save_path, "wb") as fout:
                 pickle.dump(to_save, fout)
+
+            # Log
+            print_log(
+                f"[{self.__class__.__name__}] Prediction results saved to "
+                f"{save_path}",
+                logger=get_root_logger(),
+            )
+
         synchronize()
         return keys
 
