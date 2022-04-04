@@ -2,6 +2,9 @@ from typing import List, Any
 from collections import defaultdict
 
 import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import Tensor as T
 
 from ..utils.dist_utils import gather_and_compare
 
@@ -16,6 +19,39 @@ def calculate_softmax_np(logits: np.ndarray, dim: int):
     """
     e_logits = np.exp(logits - np.max(logits, axis=dim, keepdims=True))
     return e_logits / np.sum(e_logits, axis=dim, keepdims=True)
+
+
+def calculate_entropy_torch(
+    logits: T,
+    dim: int,
+    normalized: bool,
+    assert_normalized: bool = False,
+    eps: float = 1e-8,
+) -> T:
+    """
+    Torch-version Shannon entropy calculation.
+
+    Args:
+        logits (torch.Tensor): Input logits, normalized or not normalized.
+        dim (int): Dimension along which entropy is calculated.
+        normalized (bool): Whether `tensor` is normalized along `dim` axis.
+            If not, a softmax layer will be applied to the input tensor.
+        assert_normalized (bool): Whether to check if the array is normalized
+            or not if `normalized` is True.
+    """
+    if not normalized:
+        logits = F.softmax(logits, dim=dim)
+    elif assert_normalized:
+        logits_s = logits.sum(dim=dim)
+        one = torch.Tensor([1.0], device=logits.device)
+        if not torch.allclose(logits_s, one):
+            raise ValueError(
+                "The array has not been normalized (e.g., softmaxed)"
+            )
+    logits = logits + eps
+    entropy = - logits * torch.log(logits)
+    entropy = torch.sum(entropy, dim=dim)
+    return entropy
 
 
 def calculate_entropy_np(
@@ -50,12 +86,53 @@ def calculate_entropy_np(
     return entropy
 
 
+def calculate_bvsb_torch(
+    logits: T,
+    dim: int,
+    normalized: bool,
+    assert_normalized: bool = False,
+) -> T:
+    """
+    Calculate best-vs-second best values from a prediction map.
+
+    Args:
+        logits (torch.Tensor): Input logits, normalized or not normalized.
+        dim (int): Dimension along which bvsb value is calculated.
+        normalized (bool): Whether `tensor` is normalized along `dim` axis.
+            If not, a softmax layer will be applied to the input tensor.
+    """
+    if logits.shape[dim] == 1:
+        raise ValueError(
+            f"Best-vs-second-best policy is not applicable for single-class "
+            f"probabilities."
+        )
+    if not normalized:
+        logits = F.softmax(logits, dim=dim)
+    elif assert_normalized:
+        logits_s = logits.sum(dim=dim)
+        one = torch.Tensor([1.0], device=logits.device)
+        if not torch.allclose(logits_s, one):
+            raise ValueError(
+                "The array has not been normalized (e.g., softmaxed)"
+            )
+
+    bvsb = torch.topk(
+        logits,
+        k=2,
+        dim=dim,
+        largest=True,
+        sorted=True,
+    )[0]
+    bvsb_0, bvsb_1 = torch.split(bvsb, split_size_or_sections=1, dim=dim)
+    bvsb = (bvsb_1 / bvsb_0).squeeze(dim=dim)
+    return bvsb
+
+
 def calculate_bvsb_np(
     logits: np.ndarray,
     dim: int,
     normalized: bool,
     assert_normalized: bool = False,
-    eps: float = 1e-8,
 ) -> np.ndarray:
     """
     Calculate best-vs-second best values from a prediction map.
