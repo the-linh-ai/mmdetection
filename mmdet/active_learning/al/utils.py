@@ -43,7 +43,7 @@ def calculate_entropy_torch(
         logits = F.softmax(logits, dim=dim)
     elif assert_normalized:
         logits_s = logits.sum(dim=dim)
-        one = torch.Tensor([1.0], device=logits.device)
+        one = torch.Tensor([1.0]).to(device=logits.device)
         if not torch.allclose(logits_s, one):
             raise ValueError(
                 "The array has not been normalized (e.g., softmaxed)"
@@ -110,7 +110,7 @@ def calculate_bvsb_torch(
         logits = F.softmax(logits, dim=dim)
     elif assert_normalized:
         logits_s = logits.sum(dim=dim)
-        one = torch.Tensor([1.0], device=logits.device)
+        one = torch.Tensor([1.0]).to(device=logits.device)
         if not torch.allclose(logits_s, one):
             raise ValueError(
                 "The array has not been normalized (e.g., softmaxed)"
