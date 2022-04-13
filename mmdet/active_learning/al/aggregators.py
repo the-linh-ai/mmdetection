@@ -30,6 +30,14 @@ class DoNothingAggregator(BaseAggregator):
 
 
 @register("aggregator")
+class SumAggregator(BaseAggregator):
+    def __call__(self, array: ndarray, axis: int) -> ndarray:
+        if array.size == 0:
+            return np.nan
+        return array.sum(axis=axis)
+
+
+@register("aggregator")
 class MeanAggregator(BaseAggregator):
     def __call__(self, array: ndarray, axis: int) -> ndarray:
         if array.size == 0:

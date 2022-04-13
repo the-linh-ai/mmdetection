@@ -33,7 +33,7 @@ def parse_unknown_args(
 ) -> Tuple[Dict[str, Any], List[Any]]:
 
     parsed_unknown_args = {}
-    exclude = ["min", "max"]
+    exclude = ["min", "max", "sum"]
 
     for arg in unknown_args:
         assert "=" in arg

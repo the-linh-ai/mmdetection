@@ -2,6 +2,10 @@ do_nothing:
     aggregator_class: DoNothingAggregator
     aggregator_init_kwargs: {}
 
+sum:
+    aggregator_class: SumAggregator
+    aggregator_init_kwargs: {}
+
 mean:
     aggregator_class: MeanAggregator
     aggregator_init_kwargs: {}
