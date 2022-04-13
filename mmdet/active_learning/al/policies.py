@@ -412,6 +412,7 @@ class MaxEntropyPolicy(BasePolicy):
     """
     accepted_output_types = [
         SingleForwardPassOutputs,
+        MonteCarloDropoutOutputs,
     ]
 
     def __init__(
@@ -436,8 +437,12 @@ class MaxEntropyPolicy(BasePolicy):
 
     def select(
         self,
-        unlabeled_outputs: Iterable[Union[SingleForwardPassOutputs]],
-        labeled_outputs: Iterable[Union[SingleForwardPassOutputs]],
+        unlabeled_outputs: Iterable[
+            Union[SingleForwardPassOutputs, MonteCarloDropoutOutputs]
+        ],
+        labeled_outputs: Iterable[
+            Union[SingleForwardPassOutputs, MonteCarloDropoutOutputs]
+        ],
     ):
         num_images_to_acquire = self.get_step_size()
         keys = []
@@ -446,16 +451,22 @@ class MaxEntropyPolicy(BasePolicy):
 
         for outputs_batch in unlabeled_outputs:
             self.verify_outputs(outputs_batch)
+            is_mc_dropout = isinstance(outputs_batch, MonteCarloDropoutOutputs)
 
             # Unpack data
             batch_keys = outputs_batch.keys
-            batch_preds = outputs_batch.preds  # list of lists of arrays of (N, C)
+            batch_preds = outputs_batch.pred_probs if is_mc_dropout \
+                else outputs_batch.preds # list of lists of arrays of (N, C)
 
             assert len(batch_keys) == len(batch_preds)
             batch_entropy_values = []
             for pred in batch_preds:
                 # Concatenate all classes' predictions and calculate entropy
-                pred = np.concatenate(pred, axis=0)  # (N, C)
+                if is_mc_dropout:
+                    pred = np.stack(pred, axis=0)  # (M, N, C)
+                    pred = pred.mean(axis=0)  # (N, C)
+                else:
+                    pred = np.concatenate(pred, axis=0)  # (N, C)
                 entropy = self.uncertainty_fn(
                     pred, dim=1, normalized=True, assert_normalized=True,
                 )  # (N,)
