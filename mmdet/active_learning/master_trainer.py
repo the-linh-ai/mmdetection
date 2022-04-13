@@ -167,6 +167,18 @@ class MasterTrainer:
         if optimizer_type is not None:
             train_config.optimizer.type = optimizer_type
 
+        # Custom logic that sets dropout probability for the bbox head
+        # For now works with FasterRCNN
+        if getattr(al_config.custom, "bbox_head_dropout_prob", None) is not None:
+            train_config.model.roi_head.bbox_head.dropout_prob = \
+                al_config.custom.bbox_head_dropout_prob
+
+        # Custom logic that sets the number of shared convolutional layers in
+        # the bbox head. For now works with FasterRCNN
+        if getattr(al_config.custom, "bbox_head_num_shared_convs", None) is not None:
+            train_config.model.roi_head.bbox_head.num_shared_convs = \
+                al_config.custom.bbox_head_num_shared_convs
+
     def _finalize_config(self):
         """
         Overwrite mmdet config

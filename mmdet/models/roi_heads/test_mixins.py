@@ -159,6 +159,69 @@ class BBoxTestMixin:
             return det_bboxes, det_labels, det_probs
         return det_bboxes, det_labels
 
+    def simple_test_bboxes_no_postprocess(self, x, img_metas, proposals):
+        """Test only det bboxes without augmentation and without box
+        postprocessing (e.g., NMS). The input and output types of this function
+        are similar to `simple_test_bboxes`, except that this fucntion does
+        not return predicted classes (so-called `label` in the code).
+        """
+
+        rois = bbox2roi(proposals)
+
+        # There is no proposal in the whole batch
+        if rois.shape[0] == 0:
+            batch_size = len(proposals)
+            det_bbox = rois.new_zeros(0, 5)
+            det_prob = rois[i].new_zeros((0, cls_score[i].shape[1]))
+            return [det_bbox] * batch_size, [det_prob] * batch_size
+
+        bbox_results = self._bbox_forward(x, rois)
+        img_shapes = tuple(meta['img_shape'] for meta in img_metas)
+        scale_factors = tuple(meta['scale_factor'] for meta in img_metas)
+
+        # split batch bbox prediction back to each image
+        assert not self.bbox_head.custom_cls_channels  # see self.bbox_head.get_bboxes()
+        cls_score = bbox_results['cls_score']
+        bbox_pred = bbox_results['bbox_pred']
+        num_proposals_per_img = tuple(len(p) for p in proposals)
+        rois = rois.split(num_proposals_per_img, 0)
+        cls_score = cls_score.split(num_proposals_per_img, 0)
+
+        # some detector with_reg is False, bbox_pred will be None
+        if bbox_pred is not None:
+            if isinstance(bbox_pred, torch.Tensor):
+                bbox_pred = bbox_pred.split(num_proposals_per_img, 0)
+            else:
+                bbox_pred = self.bbox_head.bbox_pred_split(
+                    bbox_pred, num_proposals_per_img)
+        else:
+            bbox_pred = (None, ) * len(proposals)
+
+        # apply bbox post-processing to each image individually
+        det_bboxes = []
+        det_probs = []
+        for i in range(len(proposals)):
+            if rois[i].shape[0] == 0:
+                # There is no proposal in the single image
+                det_bbox = rois[i].new_zeros(0, 5)
+                det_prob = rois[i].new_zeros((0, cls_score[i].shape[1]))
+            else:
+                det_bbox, det_prob = self.bbox_head.get_bboxes(
+                    rois[i],
+                    cls_score[i],
+                    bbox_pred[i],
+                    img_shapes[i],
+                    scale_factors[i],
+                    rescale=False,
+                    # By setting `cfg=None`, we are effectively enforcing the
+                    # no postprocessing mode
+                    cfg=None,
+                    return_probs=False)
+            det_bboxes.append(det_bbox)
+            det_probs.append(det_prob)
+
+        return det_bboxes, det_probs
+
     def aug_test_bboxes(self, feats, img_metas, proposal_list, rcnn_test_cfg):
         """Test det bboxes with test time augmentation."""
         aug_bboxes = []

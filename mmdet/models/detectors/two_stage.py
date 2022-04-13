@@ -2,6 +2,7 @@
 import warnings
 
 import torch
+from mmal.utils import enable_dropout
 
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base import BaseDetector
@@ -188,6 +189,29 @@ class TwoStageDetector(BaseDetector):
         return self.roi_head.simple_test(
             x, proposal_list, img_metas, rescale=rescale,
             return_probs=return_probs)
+
+    def mc_dropout(self, img, img_metas, num_forward_passes):
+        """Perform multiple forward passes with dropout enabled, used for
+        active learning.
+
+        Returns
+            list[tuple[list, list]]: list of tuples of (pred_bboxes,
+                pred_probs) for the current batch, where the outer list is
+                at the MC dropout level (i.e.,
+                len(results) == num_forward_passes)
+        """
+
+        assert self.with_bbox, 'Bbox head must be implemented.'
+        x = self.extract_feat(img)
+        proposal_list = self.rpn_head.simple_test_rpn(x, img_metas)
+
+        results = []
+        enable_dropout(self.roi_head)
+        for _ in range(num_forward_passes):
+            result = self.roi_head.simple_test_no_postprocess(
+                x, proposal_list, img_metas)
+            results.append(result)
+        return results
 
     def aug_test(self, imgs, img_metas, rescale=False):
         """Test with augmentations.

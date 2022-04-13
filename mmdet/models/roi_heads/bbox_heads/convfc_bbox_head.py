@@ -31,6 +31,8 @@ class ConvFCBBoxHead(BBoxHead):
                  conv_cfg=None,
                  norm_cfg=None,
                  init_cfg=None,
+                 # For active learning
+                 dropout_prob=None,  # for MC dropout
                  *args,
                  **kwargs):
         super(ConvFCBBoxHead, self).__init__(
@@ -53,6 +55,7 @@ class ConvFCBBoxHead(BBoxHead):
         self.fc_out_channels = fc_out_channels
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
+        self.dropout_prob = dropout_prob
 
         # add shared convs and fcs
         self.shared_convs, self.shared_fcs, last_layer_dim = \
@@ -70,6 +73,15 @@ class ConvFCBBoxHead(BBoxHead):
         self.reg_convs, self.reg_fcs, self.reg_last_dim = \
             self._add_conv_fc_branch(
                 self.num_reg_convs, self.num_reg_fcs, self.shared_out_channels)
+
+        # If there is no branch registered but dropout is desired
+        if self.dropout_prob is not None and num_shared_convs == \
+                num_shared_fcs == num_cls_convs == num_cls_fcs == \
+                num_reg_convs == num_reg_fcs == 0:
+            self.cls_convs.append(nn.Dropout(p=self.dropout_prob))
+            self.cls_fcs.append(nn.Dropout(p=self.dropout_prob))
+            self.reg_convs.append(nn.Dropout(p=self.dropout_prob))
+            self.reg_fcs.append(nn.Dropout(p=self.dropout_prob))
 
         if self.num_shared_fcs == 0 and not self.with_avg_pool:
             if self.num_cls_fcs == 0:
@@ -139,6 +151,8 @@ class ConvFCBBoxHead(BBoxHead):
                         padding=1,
                         conv_cfg=self.conv_cfg,
                         norm_cfg=self.norm_cfg))
+                if self.dropout_prob is not None:
+                    branch_convs.append(nn.Dropout(p=self.dropout_prob))
             last_layer_dim = self.conv_out_channels
         # add branch specific fc layers
         branch_fcs = nn.ModuleList()
@@ -153,6 +167,8 @@ class ConvFCBBoxHead(BBoxHead):
                     last_layer_dim if i == 0 else self.fc_out_channels)
                 branch_fcs.append(
                     nn.Linear(fc_in_channels, self.fc_out_channels))
+                if self.dropout_prob is not None:
+                    branch_fcs.append(nn.Dropout(p=self.dropout_prob))
             last_layer_dim = self.fc_out_channels
         return branch_convs, branch_fcs, last_layer_dim
 
@@ -200,9 +216,9 @@ class ConvFCBBoxHead(BBoxHead):
 @HEADS.register_module()
 class Shared2FCBBoxHead(ConvFCBBoxHead):
 
-    def __init__(self, fc_out_channels=1024, *args, **kwargs):
+    def __init__(self, fc_out_channels=1024, num_shared_convs=0, *args, **kwargs):
         super(Shared2FCBBoxHead, self).__init__(
-            num_shared_convs=0,
+            num_shared_convs=num_shared_convs,
             num_shared_fcs=2,
             num_cls_convs=0,
             num_cls_fcs=0,

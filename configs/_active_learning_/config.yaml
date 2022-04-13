@@ -22,7 +22,7 @@ general:
 
 mmdet_config:
     _file_: mmdet_config.yaml
-    _choice_: nuimages
+    _choice_: faster_rcnn_nuimages
 
 trainer:
     _file_: trainers.yaml
@@ -49,3 +49,5 @@ training:
 custom:
     al_step_size: null  # override init_size and step_size in AL policies
     optimizer: null  # override optimizer type (e.g., SGD, Adam, etc.)
+    bbox_head_num_shared_convs: null  # set the number of shared convolution layers in the bbox head
+    bbox_head_dropout_prob: null  # set the dropout probability in the bbox head

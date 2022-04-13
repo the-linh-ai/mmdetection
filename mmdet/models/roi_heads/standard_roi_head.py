@@ -281,6 +281,20 @@ class StandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
                 x, img_metas, det_bboxes, det_labels, rescale=rescale)
             return list(zip(bbox_results, segm_results))
 
+    def simple_test_no_postprocess(self,
+                                   x,
+                                   proposal_list,
+                                   img_metas):
+        """Test without augmentation and without box postprocessing
+        (e.g., NMS). Used for active learning.
+        """
+        assert self.with_bbox, 'Bbox head must be implemented.'
+        det_bboxes, det_probs = self.simple_test_bboxes_no_postprocess(
+            x, img_metas, proposal_list)
+        det_bboxes = [box.detach().cpu().numpy() for box in det_bboxes]
+        det_probs = [prob.detach().cpu().numpy() for prob in det_probs]
+        return det_bboxes, det_probs
+
     def aug_test(self, x, proposal_list, img_metas, rescale=False):
         """Test with augmentations.
 

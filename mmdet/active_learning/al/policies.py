@@ -551,7 +551,7 @@ class BALDPolicy(BasePolicy):
 
             # Unpack data
             batch_keys = outputs_batch.keys
-            batch_preds = outputs_batch.preds  # list of lists of lists of arrays of (N, C)
+            batch_preds = outputs_batch.pred_probs  # list[list[ndarray]]
 
             assert len(batch_keys) == len(batch_preds)
             batch_bald_values = []
@@ -562,7 +562,6 @@ class BALDPolicy(BasePolicy):
                 # Loop over all MC dropout predictions
                 for pred in preds:
                     # Concatenate all classes' predictions and calculate entropy
-                    pred = np.concatenate(pred, axis=0)  # (N, C)
                     average_preds += pred  # (N, C)
                     entropy = calculate_entropy_np(
                         pred, dim=1, normalized=True, assert_normalized=True,

@@ -29,7 +29,6 @@ from mmcv.utils import print_log
 
 # mmdet
 from mmdet.datasets import build_dataset, build_dataloader
-from mmdet.models.utils import SyncedDropout
 from mmdet.utils import get_root_logger
 from mmdet.utils.logger import ProgressBar
 
@@ -221,11 +220,15 @@ class MonteCarloDropoutOutputs(BaseOutputType):
     def __init__(
         self,
         keys: List[str],
-        preds: List[List[List[np.ndarray]]],
+        # Outer: MC dropout level; inner: sample level
+        pred_bboxes: List[List[np.ndarray]],
+        # Outer: MC dropout level; inner: sample level
+        pred_probs: List[List[np.ndarray]],
         **kwargs,
     ):
         self.keys = keys
-        self.preds = preds
+        self.pred_bboxes = pred_bboxes
+        self.pred_probs = pred_probs
         for key, value in kwargs.items():
             setattr(self, key, value)
 
@@ -233,8 +236,9 @@ class MonteCarloDropoutOutputs(BaseOutputType):
 @register("learner")
 class MonteCarloDropoutLearner(BaseLearner):
     """
-    Monte Carlo dropout learner, which perform multiple forward passes through
-    the model to obtain the multiple sets of predicted probabilities.
+    Monte Carlo dropout (MC dropout) learner, which perform multiple forward
+    passes through the model to obtain the multiple sets of predicted
+    probabilities.
     """
     def __init__(self, num_forward_passes: int = 10, **kwargs):
         super().__init__(**kwargs)
@@ -248,23 +252,45 @@ class MonteCarloDropoutLearner(BaseLearner):
         image_metas: List[dict],
     ) -> MonteCarloDropoutOutputs:
 
-        all_preds = []
-        SyncedDropout.train_all()  # enable all SyncedDropout instances
+        results = self.model.mc_dropout(
+            img=images,
+            img_metas=image_metas,
+            num_forward_passes=self.num_forward_passes,
+        )  # list[tuple[list, list]]
 
-        # Perform multiple forward passes
-        for _ in range(self.num_forward_passes):
-            _, preds = self.model.simple_test(
-                img=images, img_metas=image_metas, return_probs=True,
-            )  # list[list[ndarray]] (outer: image level; inner: class level)
-            all_preds.append(preds)
+        # Each is list[list[ndarray]], where outer: MC dropout level;
+        # inner: sample level
+        pred_bboxes, pred_probs = list(zip(*results))
 
-        # Merge image by image
-        assert all(len(all_preds[0]) == len(preds) for preds in all_preds)
-        all_preds = list(zip(*all_preds))
+        # Check that the number of samples is consistent across MC dropout
+        # passes
+        for i in range(len(pred_bboxes)):
+            if len(pred_bboxes[i]) != len(pred_bboxes[0]):
+                raise RuntimeError(
+                    f"Number of samples across MC dropout passes is "
+                    f"inconsistent: {[len(b) for b in pred_bboxes]}")
+
+        # Check that the box shape for each sample is consistent
+        # across MC dropout passes
+        num_samples = len(pred_bboxes[0])
+        for i in range(num_samples):
+            shape_0 = pred_bboxes[0][i].shape
+            for j in range(len(pred_bboxes)):
+                shape_j = pred_bboxes[j][i].shape
+                if not (shape_0 == shape_j):
+                    raise RuntimeError(
+                        f"Box shapes across MC dropout passes are "
+                        f"inconsistent: {[b[i].shape for b in pred_bboxes]}"
+                    )
+
+        # Unpack
+        pred_bboxes = list(zip(*pred_bboxes))  # list[list[ndarray]]
+        pred_probs = list(zip(*pred_probs))  # list[list[ndarray]]
 
         return MonteCarloDropoutOutputs(
             keys=image_ids,
-            preds=all_preds,
+            pred_bboxes=pred_bboxes,
+            pred_probs=pred_probs,
         )
 
     def step(self):
