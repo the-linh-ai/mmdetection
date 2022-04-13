@@ -14,7 +14,11 @@ if sys.version_info >= (3, 7):
 class BBoxTestMixin(object):
     """Mixin class for testing det bboxes via DenseHead."""
 
-    def simple_test_bboxes(self, feats, img_metas, rescale=False):
+    def simple_test_bboxes(self,
+                           feats,
+                           img_metas,
+                           rescale=False,
+                           return_probs=False):
         """Test det bboxes without test-time augmentation, can be applied in
         DenseHead except for ``RPNHead`` and its variants, e.g., ``GARPNHead``,
         etc.
@@ -25,6 +29,8 @@ class BBoxTestMixin(object):
             img_metas (list[dict]): List of image information.
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
+            return_probs (bool): Whether to return predicted probabilities used
+                for active learning.
 
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
@@ -34,8 +40,10 @@ class BBoxTestMixin(object):
                 with shape (n,)
         """
         outs = self.forward(feats)
-        results_list = self.get_bboxes(
-            *outs, img_metas=img_metas, rescale=rescale)
+        results_list = self.get_bboxes(*outs,
+                                       img_metas=img_metas,
+                                       rescale=rescale,
+                                       return_probs=return_probs)
         return results_list
 
     def aug_test_bboxes(self, feats, img_metas, rescale=False):

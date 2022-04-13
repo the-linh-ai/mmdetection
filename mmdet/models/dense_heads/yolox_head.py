@@ -219,7 +219,8 @@ class YOLOXHead(BaseDenseHead, BBoxTestMixin):
                    img_metas=None,
                    cfg=None,
                    rescale=False,
-                   with_nms=True):
+                   with_nms=True,
+                   return_probs=False):
         """Transform network outputs of a batch into bbox results.
         Args:
             cls_scores (list[Tensor]): Classification scores for all
@@ -238,6 +239,9 @@ class YOLOXHead(BaseDenseHead, BBoxTestMixin):
                 Default False.
             with_nms (bool): If True, do nms before return boxes.
                 Default True.
+            return_probs (bool): Whether to return predicted probabilities used
+                for active learning.
+
         Returns:
             list[list[Tensor, Tensor]]: Each item in result_list is 2-tuple.
                 The first item is an (n, 5) tensor, where the first 4 columns
@@ -273,9 +277,21 @@ class YOLOXHead(BaseDenseHead, BBoxTestMixin):
             for objectness in objectnesses
         ]
 
-        flatten_cls_scores = torch.cat(flatten_cls_scores, dim=1).sigmoid()
+        # Logits
+        flatten_cls_scores = torch.cat(flatten_cls_scores, dim=1)
+        flatten_objectness = torch.cat(flatten_objectness, dim=1)
+        if return_probs:
+            flatten_probs = torch.cat([
+                flatten_cls_scores,
+                flatten_objectness.unsqueeze(2),
+            ], dim=2)  # (B, H * W * P * L, C + 1), where P is the number of
+            # priors and L is the number of scale layers
+            flatten_probs = flatten_probs.softmax(dim=2)
+        else:
+            flatten_probs = None
+        flatten_cls_scores = flatten_cls_scores.sigmoid()
+        flatten_objectness = flatten_objectness.sigmoid()
         flatten_bbox_preds = torch.cat(flatten_bbox_preds, dim=1)
-        flatten_objectness = torch.cat(flatten_objectness, dim=1).sigmoid()
         flatten_priors = torch.cat(mlvl_priors)
 
         flatten_bboxes = self._bbox_decode(flatten_priors, flatten_bbox_preds)
@@ -287,11 +303,17 @@ class YOLOXHead(BaseDenseHead, BBoxTestMixin):
         result_list = []
         for img_id in range(len(img_metas)):
             cls_scores = flatten_cls_scores[img_id]
+            cls_probs = None if flatten_probs is None \
+                else flatten_probs[img_id]
             score_factor = flatten_objectness[img_id]
             bboxes = flatten_bboxes[img_id]
 
             result_list.append(
-                self._bboxes_nms(cls_scores, bboxes, score_factor, cfg))
+                self._bboxes_nms(cls_scores,
+                                 bboxes,
+                                 score_factor,
+                                 cfg,
+                                 cls_probs=cls_probs))
 
         return result_list
 
@@ -307,19 +329,28 @@ class YOLOXHead(BaseDenseHead, BBoxTestMixin):
         decoded_bboxes = torch.stack([tl_x, tl_y, br_x, br_y], -1)
         return decoded_bboxes
 
-    def _bboxes_nms(self, cls_scores, bboxes, score_factor, cfg):
+    def _bboxes_nms(self,
+                    cls_scores,
+                    bboxes,
+                    score_factor,
+                    cfg,
+                    cls_probs=None):
         max_scores, labels = torch.max(cls_scores, 1)
         valid_mask = score_factor * max_scores >= cfg.score_thr
 
         bboxes = bboxes[valid_mask]
         scores = max_scores[valid_mask] * score_factor[valid_mask]
         labels = labels[valid_mask]
+        if cls_probs is not None:
+            cls_probs = cls_probs[valid_mask]
 
         if labels.numel() == 0:
-            return bboxes, labels
+            return (bboxes, labels) if cls_probs is None \
+                else (bboxes, labels, cls_probs)
         else:
             dets, keep = batched_nms(bboxes, scores, labels, cfg.nms)
-            return dets, labels[keep]
+            return (dets, labels[keep]) if cls_probs is None \
+                else (dets, labels[keep], cls_probs[keep])
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'objectnesses'))
     def loss(self,

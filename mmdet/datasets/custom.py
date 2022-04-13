@@ -67,7 +67,8 @@ class CustomDataset(Dataset):
                  file_client_args=dict(backend='disk'),
                  # For active learning; added by Tuyen
                  debugging=False,
-                 data_pool=None):
+                 data_pool=None,
+                 delay_post_process=False):
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix
@@ -80,10 +81,8 @@ class CustomDataset(Dataset):
         # For active learning; added by Tuyen
         self.debugging = debugging
         self.data_pool = data_pool
-        if data_pool is not None and test_mode:
-            raise RuntimeError(
-                "Illegally attempting to use data pool for test data."
-            )
+        self.post_processed = False
+        self.delay_post_process = delay_post_process
 
         # join paths if data_root is specified
         if self.data_root is not None:
@@ -132,11 +131,8 @@ class CustomDataset(Dataset):
                 self.proposals = [self.proposals[i] for i in valid_inds]
 
         # Post process for active learning
-        self.post_process()
-
-        if not test_mode:
-            # set group flag for the sampler
-            self._set_group_flag()
+        if not delay_post_process:
+            self.post_process()
 
         # processing pipeline
         self.pipeline = Compose(pipeline)
@@ -145,8 +141,23 @@ class CustomDataset(Dataset):
         """Total number of samples of data."""
         return len(self.data_infos)
 
+    def register_metadata(self, debugging, data_pool):
+        self.debugging = debugging
+        self.data_pool = data_pool
+
     def post_process(self):
         """Custom logic for active learning."""
+        if self.post_processed:
+            raise RuntimeError(
+                "Attempting to post-process the dataset for the second time."
+            )
+        self.post_processed = True
+
+        if self.data_pool is not None and self.test_mode:
+            raise RuntimeError(
+                "Illegally attempting to use data pool for test data."
+            )
+
         # Debugging: restrict to first xx images
         if self.debugging:
             num_images_debugging = 50
@@ -171,6 +182,10 @@ class CustomDataset(Dataset):
 
         # Image IDs, used for all active learning processes
         self._valid_image_ids = [info["filename"] for info in self.data_infos]
+
+        if not self.test_mode:
+            # set group flag for the sampler
+            self._set_group_flag()
 
     def get_image_ids(self):
         """Get image IDs used for active learning."""

@@ -34,7 +34,7 @@ learner_pipeline = [
     dict(type='RandomFlip', flip_ratio=0.0),  # for backward compatibility
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size=(900, 1600)),
-    dict(type='ImageToTensor', keys=['img']),
+    dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img']),
 ]
 data = dict(

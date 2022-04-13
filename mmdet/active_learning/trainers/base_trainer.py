@@ -15,6 +15,7 @@ from mmcv.runner import (
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 
 # AL
+from .custom_hooks import ModelParametersRecorderHook
 from ..master_trainer import MasterTrainer
 from ..utils.dist_utils import synchronize_weights
 from ..utils.registry import register
@@ -28,7 +29,7 @@ from mmdet.datasets import (
     build_dataset,
 )
 from mmdet.utils import get_root_logger
-from mmdet.utils.comm import is_main_process, synchronize
+from mmdet.utils.comm import is_main_process
 
 
 @register("trainer")
@@ -150,11 +151,6 @@ class BaseObjectDetectionTrainer:
                 device_ids=self.cfg.gpu_ids,
             )
 
-        # Save model parameters to be used to reset model
-        if is_main_process():
-            self.model_state_dict = deepcopy(self.model.state_dict())
-        synchronize()
-
     def initialize_optimizers(self):
         """
         Initialize optimizer(s).
@@ -164,7 +160,7 @@ class BaseObjectDetectionTrainer:
     def initialize_mmdet_runner(self):
         cfg = deepcopy(self.cfg)  # need to copy since it will be modified in-place
         # Build runner
-        self.runner = build_runner(
+        self.runner: EpochBasedRunner = build_runner(
             cfg.runner,
             default_args=dict(
                 model=self.model,
@@ -213,6 +209,18 @@ class BaseObjectDetectionTrainer:
             priority='LOW',
         )
 
+        # Find the custom model parameters hook
+        self.model_parameters_hook = None
+        for hook in self.runner.hooks:
+            if isinstance(hook, ModelParametersRecorderHook):
+                self.model_parameters_hook = hook
+                break
+        else:
+            raise RuntimeError(
+                f"No `ModelParametersRecorderHook` found: "
+                f"{[type(hook) for hook in self.runner.hooks]}"
+            )
+
     def reset(self, reset_model: bool = True):
         """
         Reset data loaders, model, optimizer and learning rate scheduler.
@@ -232,7 +240,7 @@ class BaseObjectDetectionTrainer:
             # it on other processes to ensure synchronization
             print_log("Resetting model...", logger=get_root_logger())
             if is_main_process():
-                state_dict = deepcopy(self.model_state_dict)
+                state_dict = self.model_parameters_hook.get_model_parameters()
                 self.model.load_state_dict(state_dict)
 
             # Synchronize weights

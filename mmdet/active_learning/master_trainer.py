@@ -185,10 +185,6 @@ class MasterTrainer:
         # Learning rate
         train_config.optimizer.lr = al_config.training.lr
 
-        # Number of classes
-        train_config.model.roi_head.bbox_head.num_classes = \
-            al_config.training.num_classes
-
         # Seed
         seed = al_config.general.seed
         assert seed is not None
@@ -343,7 +339,7 @@ class MasterTrainer:
         # We only have all metric values in the main process
         if is_main_process():
             all_mAPs = self.det_trainer.runner.meta["all_metrics"]["bbox_mAP"]
-            best_mAP = max(all_mAPs)
+            best_mAP = max(all_mAPs) if len(all_mAPs) > 0 else 0.0
             broadcast_object(best_mAP)
         else:
             best_mAP = broadcast_object()
@@ -363,7 +359,7 @@ class MasterTrainer:
         To be called at the middle of each active learning step (right before
         the model is trained). Usually used for model resetting.
         """
-        self.det_trainer.reset()
+        self.det_trainer.reset(reset_model=self.step != 0)
 
     def _post_active_learning_step(self):
         """

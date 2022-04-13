@@ -356,7 +356,24 @@ class MultiImageMixDataset:
                  dataset,
                  pipeline,
                  dynamic_scale=None,
-                 skip_type_keys=None):
+                 skip_type_keys=None,
+                 debugging=False,
+                 data_pool=None):
+        # Check if the children dataset is for active learning
+        attrs = [
+            "debugging", "data_pool", "delay_post_process",
+            "register_metadata", "post_process", "get_image_ids"
+        ]
+        has_attrs = [hasattr(dataset, attr) for attr in attrs]
+        if any(has_attrs):
+            assert all(has_attrs), (
+                f"Either no or all of these attributes must be set: "
+                f"{dict(zip(attrs, has_attrs))}"
+            )
+            assert dataset.delay_post_process  # child dataset must delay postprocessing
+            dataset.register_metadata(debugging, data_pool)
+            dataset.post_process()
+
         if dynamic_scale is not None:
             raise RuntimeError(
                 'dynamic_scale is deprecated. Please use Resize pipeline '
@@ -387,6 +404,10 @@ class MultiImageMixDataset:
 
     def __len__(self):
         return self.num_samples
+
+    def get_image_ids(self):
+        """Get image IDs used for active learning."""
+        return self.dataset.get_image_ids()
 
     def __getitem__(self, idx):
         results = copy.deepcopy(self.dataset[idx])

@@ -2,5 +2,11 @@
 # NuImages
 # ==============
 
-nuimages:
+faster_rcnn_nuimages:
     config_path: configs/_active_learning_/faster_rcnn_r50_fpn_2x_nuimages.py
+
+yolox_s_nuimages:
+    config_path: configs/_active_learning_/yolox_s_8x8_300e_nuimages.py
+
+yolox_tiny_nuimages:
+    config_path: configs/_active_learning_/yolox_tiny_8x8_300e_nuimages.py

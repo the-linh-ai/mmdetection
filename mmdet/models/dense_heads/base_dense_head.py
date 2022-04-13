@@ -340,7 +340,7 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                 *outs, img_metas=img_metas, cfg=proposal_cfg)
             return losses, proposal_list
 
-    def simple_test(self, feats, img_metas, rescale=False):
+    def simple_test(self, feats, img_metas, rescale=False, return_probs=False):
         """Test function without test-time augmentation.
 
         Args:
@@ -349,6 +349,8 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
             img_metas (list[dict]): List of image information.
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
+            return_probs (bool): Whether to return predicted probabilities used
+                for active learning.
 
         Returns:
             list[tuple[Tensor, Tensor]]: Each item in result_list is 2-tuple.
@@ -357,7 +359,10 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                 The shape of the second tensor in the tuple is ``labels``
                 with shape (n, ).
         """
-        return self.simple_test_bboxes(feats, img_metas, rescale=rescale)
+        return self.simple_test_bboxes(feats,
+                                       img_metas,
+                                       rescale=rescale,
+                                       return_probs=return_probs)
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def onnx_export(self,

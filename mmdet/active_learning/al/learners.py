@@ -166,7 +166,7 @@ class BaseLearner:
                 break
 
             image_ids = [img_meta["ori_filename"] for img_meta in image_metas]
-            images = data["img"].to(self.cfg.device)
+            images = data["img"].data[0].to(self.cfg.device)
 
             prog_bar.update()
             yield self.process_one_batch(images, image_ids, image_metas)

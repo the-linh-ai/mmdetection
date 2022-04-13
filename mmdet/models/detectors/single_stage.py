@@ -84,7 +84,7 @@ class SingleStageDetector(BaseDetector):
                                               gt_labels, gt_bboxes_ignore)
         return losses
 
-    def simple_test(self, img, img_metas, rescale=False):
+    def simple_test(self, img, img_metas, rescale=False, return_probs=False):
         """Test function without test-time augmentation.
 
         Args:
@@ -92,6 +92,8 @@ class SingleStageDetector(BaseDetector):
             img_metas (list[dict]): List of image information.
             rescale (bool, optional): Whether to rescale the results.
                 Defaults to False.
+            return_probs (bool): Whether to return predicted probabilities used
+                for active learning.
 
         Returns:
             list[list[np.ndarray]]: BBox results of each image and classes.
@@ -100,10 +102,16 @@ class SingleStageDetector(BaseDetector):
         """
         feat = self.extract_feat(img)
         results_list = self.bbox_head.simple_test(
-            feat, img_metas, rescale=rescale)
+            feat, img_metas, rescale=rescale, return_probs=return_probs)
+        if not return_probs:
+            results_list = [
+                (det_bboxes, det_labels, None)
+                for det_bboxes, det_labels in results_list
+            ]
         bbox_results = [
-            bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes)
-            for det_bboxes, det_labels in results_list
+            bbox2result(det_bboxes, det_labels, self.bbox_head.num_classes,
+                        probs=det_probs)
+            for det_bboxes, det_labels, det_probs in results_list
         ]
         return bbox_results
 

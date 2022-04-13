@@ -42,7 +42,7 @@ active_learner:
 
 training:
     _file_: train.yaml
-    _choice_: nuimages_4k_32
+    _choice_: faster_rcnn_nuimages_4k_32
 
 # `custom` is a special config designed mostly
 # for workarounds, i.e., custom logic
