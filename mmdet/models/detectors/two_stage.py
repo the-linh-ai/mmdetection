@@ -2,7 +2,7 @@
 import warnings
 
 import torch
-from mmal.utils import enable_dropout
+from mmal.model_utils import enable_dropout
 
 from ..builder import DETECTORS, build_backbone, build_head, build_neck
 from .base import BaseDetector

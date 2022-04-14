@@ -6,6 +6,7 @@ from .coco_panoptic import CocoPanopticDataset
 from .custom import CustomDataset
 from .dataset_wrappers import (ClassBalancedDataset, ConcatDataset,
                                MultiImageMixDataset, RepeatDataset)
+from .datumaro_v1 import DatumaroV1Dataset
 from .deepfashion import DeepFashionDataset
 from .lvis import LVISDataset, LVISV1Dataset, LVISV05Dataset
 from .nuimages import NuImagesDataset
@@ -23,5 +24,6 @@ __all__ = [
     'DistributedSampler', 'build_dataloader', 'ConcatDataset', 'RepeatDataset',
     'ClassBalancedDataset', 'WIDERFaceDataset', 'DATASETS', 'PIPELINES',
     'build_dataset', 'replace_ImageToTensor', 'get_loading_pipeline',
-    'NumClassCheckHook', 'CocoPanopticDataset', 'MultiImageMixDataset'
+    'NumClassCheckHook', 'CocoPanopticDataset', 'MultiImageMixDataset',
+    'DatumaroV1Dataset'
 ]

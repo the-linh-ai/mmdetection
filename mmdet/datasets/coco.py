@@ -66,6 +66,11 @@ class CocoDataset(CustomDataset):
             total_ann_ids), f"Annotation ids in '{ann_file}' are not unique!"
         return data_infos
 
+    def post_process(self):
+        super().post_process()
+        if self.debugging:
+            self.img_ids = self.img_ids[:len(self.data_infos)]
+
     def get_ann_info(self, idx):
         """Get COCO annotation by index.
 

@@ -220,9 +220,9 @@ class MonteCarloDropoutOutputs(BaseOutputType):
     def __init__(
         self,
         keys: List[str],
-        # Outer: MC dropout level; inner: sample level
+        # Outer: sample level ; inner: MC dropout level
         pred_bboxes: List[List[np.ndarray]],
-        # Outer: MC dropout level; inner: sample level
+        # Outer: sample level ; inner: MC dropout level
         pred_probs: List[List[np.ndarray]],
         **kwargs,
     ):
