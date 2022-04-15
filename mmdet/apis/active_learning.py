@@ -153,7 +153,12 @@ def _active_learning_inference(model, data, device):
         )
         for prob in probs
     ]
-    max_entropy = np.concatenate(entropys).max()
+
+    entropys_ = np.concatenate(entropys)
+    if len(entropys_) == 0:  # no predictions
+        max_entropy = -1
+    else:
+        max_entropy = entropys_.max()
 
     return {
         "boxes": pred_bboxes,
