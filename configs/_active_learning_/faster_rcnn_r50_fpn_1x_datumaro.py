@@ -10,3 +10,6 @@ model = dict(
         bbox_head=dict(
             num_classes=None,  # to be set manually
         )))
+
+
+optimizer = dict(lr=0.04)  # the batch size in `datumaro_detection.py` is doubled

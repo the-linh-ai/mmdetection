@@ -7,7 +7,6 @@ import time
 import warnings
 
 import mmcv
-import torch
 from mmcv import Config, DictAction
 from mmcv.runner import get_dist_info, init_dist
 from mmcv.utils import get_git_hash
@@ -28,8 +27,9 @@ from mmdet.utils import collect_env, get_root_logger
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Train a detector for active learning, with the default '
-                    'dataset being `DatumaroV1Dataset`'
+        description='Train a detector for active learning and use it for '
+                    'active learning inference, with the default dataset '
+                    'being `DatumaroV1Dataset`'
     )
     parser.add_argument(
         'train_dataset_dir',
@@ -64,19 +64,25 @@ def parse_args():
         '--inference_patterns',
         type=str,
         nargs="+",
-        default=["*.jpg", "*.png"],
+        default=["*.jpg", "*.png", "*.jpeg"],
         help="Search patterns for data. For example, in a image-based task, "
-             "one should specify ['*.jpg', '*.png']",
+             "one should specify ['*.jpg', '*.png', '*.jpeg']",
     )
     parser.add_argument(
         '--max-image-width',
-        help='Maxium image width',
+        help='Maximum image width',
         default=MAX_IMAGE_WIDTH,
     )
     parser.add_argument(
         '--max-image-height',
-        help='Maxium image height',
+        help='Maximum image height',
         default=MAX_IMAGE_HEIGHT,
+    )
+    parser.add_argument(
+        '--no-autoscale-lr',
+        action="store_true",
+        help='Whether NOT to auto-scale the learning rate based on the batch '
+             'size and number of GPUs. By default lr autoscaling is enabled.',
     )
 
     group_gpus = parser.add_mutually_exclusive_group()
@@ -124,14 +130,12 @@ def main():
 
     args = parse_args()
     cfg = Config.fromfile(args.config)
+    orig_batch_size = cfg.data.samples_per_gpu
+
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
-    # set cudnn_benchmark
-    if cfg.get('cudnn_benchmark', False):
-        torch.backends.cudnn.benchmark = True
 
-    if args.work_dir is not None:
-        cfg.work_dir = args.work_dir
+    cfg.work_dir = args.work_dir
     cfg.auto_resume = False
     if args.gpu_ids is not None:
         cfg.gpu_ids = args.gpu_ids
@@ -191,7 +195,7 @@ def main():
     ======================================================================
     """
     # Set custom attributes
-    custom_logic_pretraining(cfg, args, logger)
+    custom_logic_pretraining(cfg, args, logger, orig_batch_size)
     # log some basic info
     logger.info(f'Distributed training: {distributed}')
     logger.info(f'Config:\n{cfg.pretty_text}')

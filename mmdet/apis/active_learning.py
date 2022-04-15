@@ -63,12 +63,12 @@ def get_image_size(args, image_ratio, is_single_ratio):
         # Fall back to the max image resolution if failed to derive
         # an appropriate image resolution
         if image_width < MIN_IMAGE_WIDTH or image_height < MIN_IMAGE_HEIGHT:
-            image_width = MAX_IMAGE_WIDTH
-            image_height = MAX_IMAGE_HEIGHT
+            image_width = max_image_width
+            image_height = max_image_height
     return (image_height, image_width)
 
 
-def custom_logic_pretraining(cfg, args, logger):
+def custom_logic_pretraining(cfg, args, logger, orig_batch_size):
     """Set custom attributes for the config in-place"""
     # Read the annotation file
     ann_info = read_ann(args)
@@ -76,7 +76,10 @@ def custom_logic_pretraining(cfg, args, logger):
     # Auto infer an appropriate image sizes
     image_size = get_image_size(
         args, ann_info["image_ratio"], ann_info["is_single_ratio"])
-    logger.info(f"Chosen image size (h, w): {image_size}")
+    logger.info(
+        f"Chosen image size (h, w): {image_size}, is_single_ratio: "
+        f"{ann_info['is_single_ratio']}"
+    )
     # Set image sizes
     assert cfg.data.train.pipeline[2].type == "Resize"
     cfg.data.train.pipeline[2].img_scale = image_size
@@ -84,6 +87,11 @@ def custom_logic_pretraining(cfg, args, logger):
     cfg.data.val.pipeline[1].img_scale = image_size
     assert cfg.data.test.pipeline[1].type == "MultiScaleFlipAug"
     cfg.data.test.pipeline[1].img_scale = image_size
+
+    # If single ratio, enable torch.cudnn.benchmark
+    # Otherwise disable it
+    # See https://discuss.pytorch.org/t/what-does-torch-backends-cudnn-benchmark-do/5936
+    torch.backends.cudnn.benchmark = ann_info["is_single_ratio"]
 
     # Set data paths
     img_dir = osp.join(args.train_dataset_dir, "images/default/")
@@ -106,6 +114,17 @@ def custom_logic_pretraining(cfg, args, logger):
     cfg.checkpoint_config.interval = int(2 ** 32)  # don't save after every epoch
     cfg.evaluation.save_best = "bbox_mAP"  # save best model based on this metric
 
+    # Learning rate rescaling; note that in MMLab, all configs are
+    # to be used with 8 GPUs
+    if not args.no_autoscale_lr:
+        batch_size = cfg.data.samples_per_gpu
+        num_gpus = len(cfg.gpu_ids)
+        cfg.optimizer['lr'] = cfg.optimizer['lr'] * \
+            (batch_size * num_gpus) / (orig_batch_size * 8)
+        logger.info(
+            f"Learning rate has been rescaled to {cfg.optimizer['lr']}"
+        )
+
 
 def custom_logic_posttraining(runner, cfg, logger):
     """Post-training custom logic"""
@@ -113,7 +132,7 @@ def custom_logic_posttraining(runner, cfg, logger):
 
 
 @torch.no_grad()
-def _active_learning_inference(cfg, model, data, device):
+def _active_learning_inference(model, data, device):
     # pred_bboxes: list[list[ndarray]]; probs: list[list[ndarray]]
     # outer: sample-level; inner: class-level
     pred_bboxes, probs = model.simple_test(
@@ -147,6 +166,7 @@ def _active_learning_inference(cfg, model, data, device):
 @torch.no_grad()
 def active_learning_inference(cfg, model, data_dir, patterns, logger):
     # Prepare
+    model.eval()
     device = next(model.parameters()).device
     dataset = CustomDataset(cfg, data_dir, patterns, logger)
     dataloader = build_dataloader(
@@ -172,7 +192,7 @@ def active_learning_inference(cfg, model, data_dir, patterns, logger):
         assert len(data["img_metas"]) == len(data["img"]) == 1  # single-scale
         path = data["img_metas"][0].data[0][0]["ori_filename"]
         keys.append(get_base_name(path))
-        pred = _active_learning_inference(cfg, model, data, device)
+        pred = _active_learning_inference(model, data, device)
         preds.append(pred)
 
         if rank == 0:
