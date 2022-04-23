@@ -69,12 +69,13 @@ def _datumaro_to_coc(datumaro_data, sample_idxs):
         item = datumaro_data["items"][i]
 
         # Image
-        image_height, image_width = item["image"]["size"]
+        image_height = item["image"]["attr"]["height"]
+        image_width = item["image"]["attr"]["width"]
         coco_data["images"].append({
             "id": image_id,
             "width": image_width,
             "height": image_height,
-            "file_name": item["image"]["path"],
+            "file_name": item["attr"]["file_name"],
         })
 
         # Annotations
