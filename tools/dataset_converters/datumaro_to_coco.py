@@ -27,6 +27,12 @@ def parse_args():
         """,
     )
     parser.add_argument(
+        'chosen_img_path',
+        type=str,
+        help="Path to the `chosen_imgs.txt` file containing names of files "
+             "used for training and evaluation.",
+    )
+    parser.add_argument(
         'val_split',
         type=float,
         help='Ratio of the validation set.')
@@ -104,12 +110,22 @@ def _datumaro_to_coc(datumaro_data, sample_idxs):
     return coco_data
 
 
-def datumaro_to_coco(datumaro_data, val_split):
+def datumaro_to_coco(datumaro_data, chosen_images, val_split):
+    # Filter chosen images
+    datumaro_data["items"] = [
+        item for item in datumaro_data["items"]
+        if item["attr"]["file_name"] in chosen_images
+    ]
+
     # Allocations
     assert 0.0 <= val_split < 1.0
     num_samples = len(datumaro_data["items"])
-    num_samples_train = round(num_samples * (1 - val_split))
-    num_samples_val = num_samples - num_samples_train
+    assert num_samples > 1, f"Too few samples: {num_samples}"
+
+    num_samples_val = max(round(num_samples * val_split), 1)
+    num_samples_train = num_samples - num_samples_val
+    assert num_samples_val > 0 and num_samples_train > 0
+
     allocations = ([0] * num_samples_train) + ([1] * num_samples_val)
     allocations = np.array(allocations)
     print_log(
@@ -134,12 +150,18 @@ def datumaro_to_coco(datumaro_data, val_split):
 def main():
     args = parse_args()
 
-    # Read
+    # Read annotations
     with open(osp.join(args.data_dir, "annotations/default.json"), "r") as fin:
         annotations = json.load(fin)
+    # Read list of chosen images
+    with open(args.chosen_img_path, "r") as fin:
+        chosen_images = [line.strip() for line in fin]
+    assert len(chosen_images) == len(set(chosen_images))
+    chosen_images = set(chosen_images)
+
     # Convert
     train_data, val_data = datumaro_to_coco(
-        annotations, val_split=args.val_split)
+        annotations, chosen_images, val_split=args.val_split)
     # Save
     with open(osp.join(args.data_dir, "annotations/train.json"), "w") as fout:
         json.dump(train_data, fout, indent=2)
