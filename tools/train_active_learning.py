@@ -249,6 +249,24 @@ def main():
         patterns=args.inference_patterns,
         logger=logger,
     )
+
+    # Consolidate results
+    mAPs = runner.meta["all_metrics"]["bbox_mAP"]
+    best_performance = max(mAPs) if len(mAPs) > 0 else -1
+
+    cat2label = datasets[0].cat2label
+    # Sanity checks to make sure that original classes are still preserved
+    assert all(k == v for k, v in cat2label.items())  # sanity check
+    assert len(cat2label) == len(datasets[0].CLASSES)
+    categories = [
+        {"id": i, "name": cat} for i, cat in enumerate(datasets[0].CLASSES)]
+
+    results = {
+        "images": results,
+        "model_performance": best_performance,
+        "classes": categories,
+    }
+    # Save
     with open(osp.join(cfg.work_dir, "al_inference.pkl"), "wb") as fout:
         pickle.dump(results, fout)
 
