@@ -150,7 +150,7 @@ def _active_learning_inference(model, data, device):
     entropys = [
         calculate_entropy_np(
             prob, dim=1, normalized=True, assert_normalized=True,
-        )
+        ) / np.log(len(model.CLASSES) + 1)  # rescale; +1 for background class
         for prob in probs
     ]
 
