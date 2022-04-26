@@ -6,7 +6,7 @@ import time
 import torch
 import numpy as np
 
-from mmal.data_utils import get_base_name, CustomDataset
+from mmal.data_utils import CustomDataset
 from mmal.dist_utils import gather
 from mmal.uncertainty_utils import calculate_entropy_np, get_unique_indices
 import mmcv
@@ -196,7 +196,7 @@ def active_learning_inference(cfg, model, data_dir, patterns, logger):
     for data in dataloader:
         assert len(data["img_metas"]) == len(data["img"]) == 1  # single-scale
         path = data["img_metas"][0].data[0][0]["ori_filename"]
-        keys.append(get_base_name(path))
+        keys.append(osp.split(path)[1])
         pred = _active_learning_inference(model, data, device)
         preds.append(pred)
 
