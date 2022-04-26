@@ -84,6 +84,13 @@ def parse_args():
         help='Whether NOT to auto-scale the learning rate based on the batch '
              'size and number of GPUs. By default lr autoscaling is enabled.',
     )
+    parser.add_argument(
+        '--backbone-path',
+        help='Whether NOT to auto-scale the learning rate based on the batch '
+             'size and number of GPUs. By default lr autoscaling is enabled.',
+        required=False,
+        type=str,
+    )
 
     group_gpus = parser.add_mutually_exclusive_group()
     group_gpus.add_argument(

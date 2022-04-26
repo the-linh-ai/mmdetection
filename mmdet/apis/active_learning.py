@@ -125,6 +125,12 @@ def custom_logic_pretraining(cfg, args, logger, orig_batch_size):
             f"Learning rate has been rescaled to {cfg.optimizer['lr']}"
         )
 
+    if args.backbone_path is not None:
+        assert cfg.model.backbone.init_cfg.checkpoint \
+            == "torchvision://resnet50"
+        cfg.model.backbone.init_cfg.checkpoint = args.backbone_path
+
+
 
 def custom_logic_posttraining(runner, cfg, logger):
     """Post-training custom logic"""
