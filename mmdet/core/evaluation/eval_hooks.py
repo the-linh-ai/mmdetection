@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import shutil
 import bisect
+import math
 import tempfile
 import os.path as osp
 
@@ -126,6 +127,9 @@ class DistEvalHook(BaseDistEvalHook):
             print('\n')
             runner.log_buffer.output['eval_iter_num'] = len(self.dataloader)
             key_score = self.evaluate(runner, results)
+            if key_score is None:
+                assert self.rule in ["greater", "less"]
+                key_score = -math.inf if self.rule == "greater" else math.inf
 
             if self.save_best:
                 self._save_ckpt(runner, key_score)
