@@ -125,11 +125,15 @@ def custom_logic_pretraining(cfg, args, logger, orig_batch_size):
             f"Learning rate has been rescaled to {cfg.optimizer['lr']}"
         )
 
+    # Allow specifying backbone path
     if args.backbone_path is not None:
         assert cfg.model.backbone.init_cfg.checkpoint \
             == "torchvision://resnet50"
         cfg.model.backbone.init_cfg.checkpoint = args.backbone_path
 
+    # NMS class agnostic
+    assert cfg.model.test_cfg.rcnn.nms.type == "nms"
+    cfg.model.test_cfg.rcnn.nms.class_agnostic = True
 
 
 def custom_logic_posttraining(runner, cfg, logger):
