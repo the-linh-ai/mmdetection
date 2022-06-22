@@ -93,7 +93,7 @@ def _datumaro_to_coc(datumaro_data, sample_idxs):
                     "image_id": image_id,
                     "category_id": ann["label_id"],
                     "bbox": [x, y, w, h],
-                    "area": int(w * h),
+                    "area": round(w * h),
                     "segmentation": None,
                     "iscrowd": 0,
                 })

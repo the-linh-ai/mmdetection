@@ -71,10 +71,12 @@ def parse_args():
     parser.add_argument(
         '--max-image-width',
         help='Maximum image width',
+        type=int,
         default=MAX_IMAGE_WIDTH,
     )
     parser.add_argument(
         '--max-image-height',
+        type=int,
         help='Maximum image height',
         default=MAX_IMAGE_HEIGHT,
     )

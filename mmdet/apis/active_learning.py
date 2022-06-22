@@ -19,6 +19,7 @@ MAX_IMAGE_HEIGHT = 640
 MAX_IMAGE_WIDTH = 640
 MIN_IMAGE_HEIGHT = 128
 MIN_IMAGE_WIDTH = 128
+BOX_AREA_THRESHOLD = 0.001
 
 
 def read_ann(args):
@@ -143,18 +144,37 @@ def custom_logic_posttraining(runner, cfg, logger):
 
 @torch.no_grad()
 def _active_learning_inference(model, data, device):
+    img_metas = data['img_metas'][0].data[0]
     # pred_bboxes: list[list[ndarray]]; probs: list[list[ndarray]]
     # outer: sample-level; inner: class-level
     pred_bboxes, probs = model.simple_test(
         img=data['img'][0].to(device),
-        img_metas=data['img_metas'][0].data[0],
+        img_metas=img_metas,
         rescale=True,
         return_probs=True,
     )
     # Unpack
-    assert len(pred_bboxes) == len(probs) == 1
+    assert len(pred_bboxes) == len(probs) == len(img_metas) == 1
     pred_bboxes = pred_bboxes[0]
     probs = probs[0]
+
+    # Filter out tiny boxes
+    masks = []
+    image_height, image_width, _ = img_metas[0]["ori_shape"]
+    image_area = image_height * image_width
+    for pred_bboxes_i in pred_bboxes:
+        pred_bbox_areas = (
+            (pred_bboxes_i[:, 2] - pred_bboxes_i[:, 0]) *
+            (pred_bboxes_i[:, 3] - pred_bboxes_i[:, 1])
+        )
+        masks_i = pred_bbox_areas >= (image_area * BOX_AREA_THRESHOLD)
+        masks.append(masks_i)
+
+    pred_bboxes = [
+        pred_bboxes_i[masks_i] for pred_bboxes_i, masks_i
+        in zip(pred_bboxes, masks)
+    ]
+    probs = [probs_i[masks_i] for probs_i, masks_i in zip(probs, masks)]
 
     # Calculate entropy
     entropys = [
